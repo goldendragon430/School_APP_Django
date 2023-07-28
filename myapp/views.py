@@ -8,19 +8,16 @@ def my_view(request):
     message = 'Upload as many files as you want!'
     # Handle file upload
     if request.method == 'POST':
-        form = DocumentForm(request.POST, request.FILES)
-        if form.is_valid():
-            newdoc = Document(docfile=request.FILES['docfile'])
-            newdoc.save()
-            filename = request.FILES['docfile']
-            ai_img_url = generate_AI_image(filename.name)
-            # Redirect to the document list after POST
-            data = {
-                'result' : ai_img_url
-                }
-            return JsonResponse(data)
-        else:
-            message = 'The form is not valid. Fix the following error:'
+        newdoc = Document(docfile=request.FILES['docfile'])
+        newdoc.save()
+        filename = request.FILES['docfile']
+        ai_img_url = generate_AI_image(filename.name)
+        # Redirect to the document list after POST
+        data = {
+            'result' : ai_img_url
+            }
+        return JsonResponse(data)
+ 
     else:
         form = DocumentForm()  # An empty, unbound form
 

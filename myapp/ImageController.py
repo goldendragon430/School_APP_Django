@@ -63,6 +63,8 @@ def extract_string_from_image(image):
                 words_rect.append(roi)
     index = 0
     output = ''
+    if len(words_rect) == 0:
+        return ''
     for rect in rectangles:
         angle = get_orientation(rect[0][0],rect[1][0],rect[2][0],rect[3][0])
         rotated = imutils.rotate_bound(words_rect[index], angle = -angle)
@@ -81,12 +83,13 @@ def extract_string_from_image(image):
     # cv2.imshow('Result',image)
     # cv2.waitKey(0)    
 def generate_AI_image(path):
-    # media_file_url = settings.MEDIA_ROOT + '\\upload\\' + path
-    # image = cv2.imread(media_file_url)
+    media_file_url = settings.MEDIA_ROOT + '\\upload\\' + path
+    image = cv2.imread(media_file_url)
     try:
-        # result = extract_string_from_image(image)
-        # print(result)
-        result = 'The engineering wizard is a systematic design efficiency.'
+        return 'https://coinscipher.com/wp-content/uploads/2023/07/file-36.jpg'
+        result = extract_string_from_image(image)
+        if result == '':
+            return 'InValid Input Image'
         response = openai.Image.create(
         prompt='fantastic and amazing image. topic is "'+ result +'"',
         n=1,
