@@ -1,101 +1,121 @@
 import cv2
-import imutils
-import math
+import fitz
+import numpy as np
 import easyocr
-import openai
-from django.conf import settings
-openai.api_key = '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'
-def get_orientation(p1,p2,p3,p4):
-
-    x1  = p1[0]
-    y1  = p1[1]
-    x2  = p2[0]
-    y2  = p2[1]
-    x4  = p4[0]
-    y4  = p4[1]   
-    d1 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)
-    d2 = (x4 - x1) * (x4 - x1) + (y4 - y1) * (y4 - y1)
-    if d2 > d1:
-        x2 = x4
-        y2 = y4
-    angle = 180 / math.pi * math.atan((y2 - y1)/(x2 - x1))
-    return angle
-def choose_correct_word_by_AI(word1, word2):
-    # print(word1)
-    # print(word2)
-    word1 = word1.lower()
-    word2 = word2.lower()
-    response = openai.ChatCompletion.create(
-        model='gpt-3.5-turbo',
-        messages=[
-            {"role": "user", "content": f"Please select  english word that spell is correct. The words are '{word1}' and '{word2}'.  If word is in 'ly' or 's' it is true."}
-        ]
-    )
-    if word1 in response.choices[0].message['content'].lower():
-        return word1
-    else:
-        return word2
-def complete_correct_sentence(str):
-    response = openai.ChatCompletion.create(
-        model='gpt-3.5-turbo',
-        messages=[
-            {"role": "user", "content": f"Please correct word's order for right string from this - '{str}'. some word's order is changed so you should make new sentence by changing word's order. new sentence must be reliable and logical.  Don't add new word anymore"}
-        ]
-    )
-    return   response.choices[0].message['content']
-def extract_string_from_image(image):
-    reader = easyocr.Reader(['en'])
-
-    imgray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    ret, thresh = cv2.threshold(imgray, 200, 255, 0)
-
-    contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    rectangles = []
-    words_rect = []
-    for contour in contours:
-        perimeter = cv2.arcLength(contour, True)
-        approx = cv2.approxPolyDP(contour, 0.02 * perimeter, True)
-        if len(approx) == 4 :
-            x, y, w, h = cv2.boundingRect(approx)
-            if w > 50 and h > 50:
-                rectangles.append(approx)
-                roi = image[y:y+h, x:x+w]
-                words_rect.append(roi)
-    index = 0
-    output = ''
-    if len(words_rect) == 0:
-        return ''
-    for rect in rectangles:
-        angle = get_orientation(rect[0][0],rect[1][0],rect[2][0],rect[3][0])
-        rotated = imutils.rotate_bound(words_rect[index], angle = -angle)
-        rotated_2 = imutils.rotate_bound(words_rect[index], angle = 180-angle)
-        index = index + 1        
-        result = reader.readtext(rotated)
-        result_2 = reader.readtext(rotated_2)
-        if len(result) == 0 or len(result_2) == 0:
-            continue
-        str_imd = choose_correct_word_by_AI(result[0][1],result_2[0][1])
-        # print(result[0][1] + ' : ' + result_2[0][1] + ' -> ' + str_imd)
-        output = output + ' ' +  str_imd
-    return complete_correct_sentence(output)
+def extract_image_pdf(pdfpath):
+    doc = fitz.open(pdfpath)
+    # for page in doc:
+    for i in range(12,20) :
+        pix = doc[i].get_pixmap()
+        pix.save(f'outfile{i}.png')
+    # break
+def is_true_image(thresh):
+    # Count the number of black pixels
+    black_pixels = np.count_nonzero(thresh == 0)
+    # Calculate the total number of pixels
+    total_pixels = thresh.shape[0] * thresh.shape[1]
+    # Calculate the percentage of black pixels
+    percent_black = (black_pixels / total_pixels) * 100
     
-    # cv2.drawContours(image, rectangles, -1, (0,255,0), 3)
-    # cv2.imshow('Result',image)
-    # cv2.waitKey(0)    
-def generate_AI_image(path):
-    media_file_url = settings.MEDIA_ROOT + '\\upload\\' + path
-    image = cv2.imread(media_file_url)
+    return percent_black > 40 and percent_black < 70
+def extract_border_lines(image):
+    height, width, _ = image.shape
+    gray = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray,50,150,apertureSize=3)
+    lines = cv2.HoughLinesP(edges,1,np.pi/180,threshold=140,minLineLength=100,maxLineGap=10)
+    min_x = 9999 
+    min_y = 9999
+    max_x = 0
+    max_y = 0
+    for line in lines:
+        x1, y1, x2, y2 = line[0]  # Extract line endpoints
+        if y1 > height * 0.3:
+            if min_x > x1:
+                min_x = x1
+            if min_x > x2:
+                min_x = x2
+            if max_x < x1:
+                max_x = x1
+            if max_x < x2:
+                max_x = x2
+            
+            if min_y > y1:
+                min_y = y1
+            if min_y > y2:
+                min_y = y2
+            if max_y < y1:
+                max_y = y1
+            if max_y < y2:
+                max_y = y2
+    cv2.line(image, (min_x, min_y), (max_x, min_y), (0, 255, 0), 1)
+    cv2.line(image, (min_x, min_y), (min_x, max_y), (0, 255, 0), 1)
+    cv2.line(image, (min_x, max_y), (max_x, max_y), (0, 255, 0), 1)
+    cv2.line(image, (max_x, min_y), (max_x, max_y), (0, 255, 0), 1)
+    cv2.line(image, ( int((min_x + max_x)/2), min_y), (int((min_x + max_x)/2), max_y), (0, 255, 0), 1)
+    
+    
+    return min_x,max_x,min_y,max_y
+def get_line_info(reader, solution_image,flag = False):
+
+    original_height, original_width, _ = solution_image.shape
+    solution_image = cv2.resize(solution_image, (8 * original_width, 8 * original_height))
+    for i in [200,180,160,140,120]:
+        ret, thresh = cv2.threshold(solution_image, i, 255, 0)
+        result2 = reader.readtext(thresh)
+        if len(result2) > 0 and (result2[0][1] == 'A' or result2[0][1] == 'B' or result2[0][1] == 'C' or result2[0][1] == 'D' or result2[0][1] == 'E' or result2[0][1] == '8' or result2[0][1] == '9' ):
+            break
+        # if flag == True:
+        #     print(result2)
+    result_letter = ''
     try:
-        return 'https://coinscipher.com/wp-content/uploads/2023/07/file-36.jpg'
-        result = extract_string_from_image(image)
-        if result == '':
-            return 'InValid Input Image'
-        response = openai.Image.create(
-        prompt='fantastic and amazing image. topic is "'+ result +'"',
-        n=1,
-        size="1024x1024"
-        )
-        image_url = response['data'][0]['url']
-        return image_url
+        result_letter = result2[0][1]
+        if result_letter == '8' or result_letter == '9' :
+            result_letter = 'B'
     except:
-        return 'File Format Error'
+        pass
+    return result_letter
+
+def OCR_TEST_IMG(img_path):
+    reader = easyocr.Reader(['en'])
+    image = cv2.imread(img_path)
+    min_x,max_x,min_y,max_y = extract_border_lines(image)
+    height, width, _ = image.shape
+    imgray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    ret, thresh = cv2.threshold(imgray, 180, 255, 0)
+    contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    result = []
+    for i in range(25):
+        result.append('')
+    for contour in contours:
+         if len(contour) > 8:
+            ellipse = cv2.fitEllipse(contour) 
+            (x, y), (major_axis, minor_axis), angle = ellipse
+
+            # Calculate the aspect ratio of the ellipse
+            aspect_ratio = major_axis / minor_axis
+
+            # Check if the aspect ratio is within a certain range to consider it as an ellipse
+            if  0.3 < aspect_ratio and major_axis > 10 and angle < 160 and y > height/3:
+                # Draw the contour
+                x, y, w, h = cv2.boundingRect(contour)
+                # Extract the subimage within the bounding rectangle
+                subimage = thresh[y:y+h, x:x+w]
+                # Display the subimage
+                if is_true_image(subimage) == True:
+                    line_number = int((y - min_y - 20) * 13 /(max_y - min_y - 20)) + 1
+                    if x > (min_x + max_x)/2:
+                        line_number = line_number + 13
+                    solution_image = image[y - 20 : y, x:x+w]
+                    
+                    result_letter = get_line_info(reader,solution_image,line_number == 8)
+                    
+                    if result_letter != '':
+                        cv2.drawContours(image, [contour], -1, (0, 255, 0), 1)
+                        result[line_number - 1] = result_letter
+                    else:
+                        if line_number < 20:
+                            cv2.drawContours(image, [contour], -1, (0, 255, 0), 1)
+                            # print(f'Line {line_number} : A')
+                            result[line_number - 1] = result_letter
+
+    return result;

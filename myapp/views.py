@@ -1,7 +1,7 @@
 from django.shortcuts import redirect, render
 from .models import Document
 from .forms import DocumentForm
-from .ImageController import generate_AI_image
+from .ImageController import OCR_TEST_IMG
 from django.http import JsonResponse
 def my_view(request):
     print(f"Great! You're using Python 3.6+. If you fail here, use the right version.")
@@ -11,7 +11,7 @@ def my_view(request):
         newdoc = Document(docfile=request.FILES['docfile'])
         newdoc.save()
         filename = request.FILES['docfile']
-        ai_img_url = generate_AI_image(filename.name)
+        ai_img_url = OCR_TEST_IMG(filename.name)
         # Redirect to the document list after POST
         data = {
             'result' : ai_img_url
