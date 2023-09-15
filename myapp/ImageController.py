@@ -2,6 +2,8 @@ import cv2
 import fitz
 import numpy as np
 import easyocr
+from django.conf import settings
+
 def extract_image_pdf(pdfpath):
     doc = fitz.open(pdfpath)
     # for page in doc:
@@ -76,8 +78,9 @@ def get_line_info(reader, solution_image,flag = False):
     return result_letter
 
 def OCR_TEST_IMG(img_path):
+    img_url = settings.MEDIA_ROOT + '\\upload\\' + img_path
     reader = easyocr.Reader(['en'])
-    image = cv2.imread(img_path)
+    image = cv2.imread(img_url)
     min_x,max_x,min_y,max_y = extract_border_lines(image)
     height, width, _ = image.shape
     imgray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -116,6 +119,8 @@ def OCR_TEST_IMG(img_path):
                         if line_number < 20:
                             cv2.drawContours(image, [contour], -1, (0, 255, 0), 1)
                             # print(f'Line {line_number} : A')
-                            result[line_number - 1] = result_letter
-
+                            result[line_number - 1] = 'A'
+    img_path = settings.MEDIA_ROOT + '\\download\\' + img_path
+    print(img_path) 
+    cv2.imwrite(img_path,image)
     return result;
